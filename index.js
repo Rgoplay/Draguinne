@@ -1,9 +1,14 @@
 // Bot discord permettant de limiter les raid et spam sur un serveur
 /*
 • Ban virtuel si :
-‌Plus de 13 messages en 20s
-‌Plus de 50% des messages des 20 dernières secondes sont des liens, mentions ou image/fichier
-‌Si plus de 6 messages sont dupliqués dans les 100 derniers messages dans les 20 dernières secondes
+// En 20s :
+Si l'utilisateur a envoyé plus de 12 messages
+Si l'utilisateur a envoyé plus de 6 messages dupliqués
+Si l'utilisateur a envoyé plus de 6 messages avec des mentions
+Si l'utilisateur a envoyé plus de 5 messages avec des liens ou fichiers
+Ou une combinaison de ces critères
+{scoreMsg: 0.83, scoreDupliMsg: 1.66, scoreMention: 1.66, scoreMedia: 2}
+
 Bannissement virtuel : donne un role "ban" qui donne accès à un unique salon avec la raison du ban et les 100 derniers messages envoyés par le banni
 
 • Passage en mode raid si sur le serveur :
@@ -31,6 +36,7 @@ const { roleVerifId } = require('./config.json');
 const { roleStaffId } = require('./config.json');
 const { roleAdminId } = require('./config.json');
 const { SlashCommandBuilder } = require('discord.js');
+const { defaultRaidModeTime } = require('./config.json');
 
 // Create a new client instance
 const Intents = new IntentsBitField();
@@ -41,7 +47,7 @@ const client = new Client({ intents: Intents, partials: [Partials.Message, Parti
 
 // Liste des utilisateurs, leurs nombres de messages, de mentions/liens/fichiers, et de leurs derniers messages
 var usersData = {};//"example":{nbMsg:0, nbHeavyMsg:0, nbDuplicMsg:0, last100Msg:[channelId, id, "content"]}
-var serverData = {nbMsg:0, nbHeavyMsg:0, nbDuplicMsg:0, last200Msg:[]};
+var serverData = {threatScore: 0, last200Msg:[]};
 
 var raidMode = false;
 var raidModeTime = 0;
@@ -51,6 +57,7 @@ var channelGate = null;
 var channelWelcome = null;
 var categorySalonsTextuels = null;
 var categorySalonsPassions = null;
+var threatConfig = {scoreMsg: 0.83, scoreDupliMsg: 1.66, scoreMention: 1.66, scoreMedia: 2}
 
 
 client.on('messageCreate', message => {
@@ -59,7 +66,7 @@ client.on('messageCreate', message => {
 
     // Si l'utilisateur n'est pas dans la liste des utilisateurs, on l'ajoute
     if (!(message.author.id in usersData)) {
-        usersData[message.author.id] = {nbMsg:0, nbHeavyMsg:0, last100Msg:[]};
+        usersData[message.author.id] = {threatScore: 0, last100Msg:[]};
     }
 
     // On ajoute le message à la liste des 100 derniers messages de l'utilisateur
@@ -76,24 +83,36 @@ client.on('messageCreate', message => {
         serverData.last200Msg.shift();
     }
 
-    // On incrémente le nombre de messages de l'utilisateur et du serveur
-    usersData[message.author.id].nbMsg += 1;
-    serverData.nbMsg += 1;
+    var isHeavyMsg = false;
 
-    // Si le message contient une mention, un lien ou un fichier, on incrémente le nombre de messages lourds de l'utilisateur
-    if (message.mentions.users.size > 0 || message.mentions.roles.size > 0 || message.mentions.everyone || message.attachments.size > 0 || message.embeds.length > 0 || message.content.includes("http")) {
-        usersData[message.author.id].nbHeavyMsg += 1;
-        serverData.nbHeavyMsg += 1;
+    // Si le message contient une mention
+    if(message.mentions.users.size > 0 || message.mentions.roles.size > 0 || message.mentions.everyone) {
+        usersData[message.author.id].threatScore += threatConfig.scoreMention;
+        serverData.threatScore += threatConfig.scoreMention;
+        isHeavyMsg = true;
+    }
+
+    // Si le message contient un lien ou un fichier
+    if (message.attachments.size > 0 || message.embeds.length > 0 || message.content.includes("http")) {
+        usersData[message.author.id].threatScore += threatConfig.scoreMedia;
+        serverData.threatScore += threatConfig.scoreMedia;
+        isHeavyMsg = true;
     }
 
     // Si le message est un doublon, on incrémente le nombre de doublons de l'utilisateur
     if (usersData[message.author.id].last100Msg.filter(msg => msg[1] == message.content).length > 1) {
-        usersData[message.author.id].nbDuplicMsg += 1;
+        usersData[message.author.id].threatScore += threatConfig.scoreDupliMsg;
+        isHeavyMsg = true;
     }
 
     // Si le message est un doublon, on incrémente le nombre de doublons du serveur
     if (serverData.last200Msg.filter(msg => msg[1] == message.content).length > 1) {
-        serverData.nbDuplicMsg += 1;
+        serverData.threatScore += threatConfig.scoreDupliMsg;
+    }
+
+    if(!isHeavyMsg){
+        usersData[message.author.id].threatScore += threatConfig.scoreMsg;
+        serverData.threatScore += threatConfig.scoreMsg;
     }
 
 });
@@ -164,7 +183,7 @@ client.on("interactionCreate", async (interaction) => {
                 // On active le mode raid
                 await interaction.reply("Le mode raid a été activé");
                 raidMode = true;
-                blockChannels();
+                lockChannels();
 
                 var logString = `<@407992364347686934> Le mode raid a été activé par ${interaction.user.username}.`
                 channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée.");
@@ -172,13 +191,10 @@ client.on("interactionCreate", async (interaction) => {
                 // On récupère l'option time
                 const time = interaction.options.getInteger('time');
                 if(time == null) {
-                    raidModeTime = 1;
+                    raidModeTime = defaultRaidModeTime;
                 } else {
-                    raidModeTime = 20-time*2;
+                    raidModeTime = time;
                     logString += ` Le mode raid sera désactivé dans ${time} minutes.`;
-                    if(raidModeTime == 0) {
-                        raidModeTime = 1;
-                    }
                 }
                 channelInfo.send(logString);
             }
@@ -187,7 +203,7 @@ client.on("interactionCreate", async (interaction) => {
                 await interaction.reply("Le mode raid a été désactivé");
                 raidMode = false;
                 raidModeTime = 0;
-                unblockChannels();
+                unlockChannels();
 
                 channelInfo.send(`<@407992364347686934> Le mode raid a été désactivé par ${interaction.user.username}.`);
                 channelGate.send("> Le mode raid vient d'être désactivé.");
@@ -210,139 +226,136 @@ async function main(){
     // On récupère le channel de bienvenue
     channelWelcome = await guild.channels.cache.get(channelWelcomeId);
     // Définition des timers
-    setInterval(userCheck, 20000);
-    setInterval(serverCheck, 30000);
+    setInterval(userAndServerCheck, 20000);
+}
+
+function userAndServerCheck(){
+    serverCheck();
+    userCheck();
 }
 
 async function userCheck(){
     // On parcourt la liste des utilisateurs
     for (const [id, user] of Object.entries(usersData)) {
         if(!raidMode) {
-            var ban = false;
             // On récupère le membre
             var member = await guild.members.cache.get(id);
 
-            // Si l'utilisateur a envoyé plus de 13 messages en 20s
-            if (user.nbMsg > 13) {
-                ban = true;
-            }
-            // Si l'utilisateur a envoyé plus de 50% de messages lourds et a envoyé plus de 8 messages
-            if (user.nbHeavyMsg / user.nbMsg > 0.5 && user.nbMsg > 8) {
-                ban = true;
-            }
-            // Si l'utilisateur a envoyé plus de 6 doublons
-            if (user.nbDuplicMsg > 6) {
-                ban = true;
-            }
+            // En 20s :
+            // Si l'utilisateur a envoyé plus de 12 messages
+            // Si l'utilisateur a envoyé plus de 6 messages dupliqués
+            // Si l'utilisateur a envoyé plus de 6 messages avec des mentions
+            // Si l'utilisateur a envoyé plus de 5 messages avec des liens ou fichiers
 
-            if(ban){
+            if(usersData[id].threatScore > 10){
                 // On banni l'utilisateur et on supprime ses messages
                 banMember(member);
+                user.threatScore = 0;
 
                 // Info du ban
                 channelInfo.send("L'utilisateur " + member.user.username +  " (<@" + member.id +">) a été banni virtuellement.");
                 channelGate.send("> Le membre <@" + member.id +"> a été banni virtuellement.");
             }
         }
-        // On check si ca fait plus d'une heure que l'utilisateur n'a pas envoyé de message
-        // On recupere le temps du dernier message
-        var lastMsgTime = (usersData[id].last100Msg[usersData[id].last100Msg.length-1][0].createdTimestamp/1000).toFixed(0);
-        // On recupere le temps actuel
-        var currentTime = (new Date().getTime()/1000).toFixed(0);
-        // Si ca fait plus d'une heure
-        if(currentTime - lastMsgTime > 3600) {
-            // On retire le membre de la liste
-            delete usersData[id];
+
+        // On décrémente le threatScore de l'utilisateur
+        if(user.threatScore > 0){
+            user.threatScore -= 5;
+        }
+        else {
+            user.threatScore = 0;
         }
 
-        // On remet à 0 les données de l'utilisateur
-        user.nbMsg = 0;
-        user.nbHeavyMsg = 0;
-        user.nbDuplicMsg = 0;
+
+        // On check si ca fait plus d'une heure que l'utilisateur n'a pas envoyé de message
+        if(usersData[id].last100Msg != undefined && usersData[id].last100Msg.length > 0){
+            // On recupere le temps du dernier message
+            var lastMsgTime = (usersData[id].last100Msg[usersData[id].last100Msg.length-1][0].createdTimestamp/1000).toFixed(0);
+            // On recupere le temps actuel
+            var currentTime = (new Date().getTime()/1000).toFixed(0);
+            // Si ca fait plus d'une heure
+            if(currentTime - lastMsgTime > 3600) {
+                // On retire le membre de la liste
+                delete usersData[id];
+            }
+        }
     }
 }
 
 
 async function serverCheck(){
-    // Si sur les 30 dernières secondes, plus de un message toute les 0,5 secondes
-    if (serverData.nbMsg > 60) {
-        raidMode = true;
-    }
-    // Si 40% des derniers messages (30s) sont des liens, mentions ou image/fichier
-    if (serverData.nbHeavyMsg / serverData.nbMsg > 0.4 && serverData.nbMsg > 15) {
-        raidMode = true;
-    }
-    // Si plus de 20 messages sont dupliqués dans les 200 derniers messages (30s)
-    if (serverData.nbDuplicMsg > 20) {
-        raidMode = true;
-    }
+    // Si sur les 20 dernières secondes :
+    // Il y a eu plus de un message toute les 0,47 secondes (42 msg /20s)
+    // 40% des messages sont des liens, mentions ou image/fichier
+    // Plus de 20 messages sont dupliqués dans les 200 derniers messages
 
-    // On remet à 0 les données du serveur
-    serverData.nbMsg = 0;
-    serverData.nbHeavyMsg = 0;
-    serverData.nbDuplicMsg = 0;
+    if(serverData.threatScore > 35){
 
-    // Si le mode raid est activé
-    if (raidMode) {
-        if(raidModeTime == 0) {
-
-            var nbMsgMax = 0;
-            var nbMsgMaxUser = [];
-            // On récupère le nombre de messages du membre ayant envoyé le plus de messages
-            for (const [id, user] of Object.entries(usersData)) {
-                if (user.nbMsg > nbMsgMax) {
-                    nbMsgMax = user.nbMsg;
-                }
+        var badUserList = [];
+        // On récupère les membres ayant un threatScore >= 8
+        for (const [id, user] of Object.entries(usersData)) {
+            if (user.threatScore >= 8) {
+                badUserList.push(id);
             }
-            // On récupère les membres ayant envoyé plus de 50% de messages que le membre ayant envoyé le plus de messages
-            for (const [id, user] of Object.entries(usersData)) {
-                if (user.nbMsg / nbMsgMax > 0.5) {
-                    nbMsgMaxUser.push(id);
-                }
-            }
+        }
 
-            // On bloque les salons (pendant 10 minutes) si plus de un membre a spammé
-            if (nbMsgMaxUser.length > 1) {
-                
-                blockChannels();
+        // On bloque les salons (on passe en mode raid pour defaultRaidModeTime minutes) si plus de un membre a spammé
+        if (badUserList.length > 1) {
+            raidMode = true;
+            raidModeTime = defaultRaidModeTime;
 
-                // On supprime les 100 derniers messages des membres ayant envoyé le plus de messages
-                for(id of nbMsgMaxUser) {
-                    var member = await guild.members.cache.get(id);
-                    banMember(member);
-                    channelInfo.send("L'utilisateur <@" + id +"> a été banni virtuellement.");
-                    channelGate.send("> Le membre <@" + id +"> a été banni virtuellement.");
-                }
+            lockChannels();
 
-                //On envoie un message dans le salon info
-                channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée.");
-                channelInfo.send("<@407992364347686934> Le mode raid a été activé.");
-            }
-            else { 
-                // Sinon pas de raid
-                raidMode = false;
+            //On envoie un message dans le salon info
+            channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée.");
+            channelInfo.send("<@407992364347686934> Le mode raid a été activé.");
+
+            // On supprime les 100 derniers messages des membres ayant envoyé le plus de messages
+            for(id of nbMsgMaxUser) {
+                var member = await guild.members.cache.get(id);
+                banMember(member);
+                channelInfo.send("L'utilisateur <@" + id +"> a été banni virtuellement.");
+                channelGate.send("> Le membre <@" + id +"> a été banni virtuellement.");
             }
         }
     }
 
+    // On remet à 0 les données du serveur
+    serverData.threatScore = 0;
+
+
     if(raidMode) {
-        raidModeTime++;
+        raidModeTime--;
         //Si le mode raid est activé depuis plus de 10 minutes
-        if (raidModeTime > 20) {
+        if (raidModeTime <= 0) {
             // On désactive le mode raid
             raidMode = false;
             raidModeTime = 0;
 
-            unblockChannels();
+            unlockChannels();
 
             //On envoie un message dans le salon info
             channelGate.send("> Le mode raid vient d'être désactivé.");
             channelInfo.send("<@407992364347686934> Le mode raid a été désactivé.");
         }
     }
+
+
+    if(serverData.last200Msg.length > 0){
+        // On check si ca fait plus d'une heure qu'un utilisateur a envoyé un message
+        // On recupere le temps du dernier message
+        var lastMsgTime = (serverData.last200Msg[serverData.last200Msg.length-1][0].createdTimestamp/1000).toFixed(0);
+        // On recupere le temps actuel
+        var currentTime = (new Date().getTime()/1000).toFixed(0);
+        // Si ca fait plus d'une heure
+        if(currentTime - lastMsgTime > 3600) {
+            // On remet purge la liste des messages du serveur
+            serverData.last200Msg = [];
+        }
+    }
 }
 
-async function blockChannels(){
+async function lockChannels(){
     // On bloque les salons de la catégorie salons textuels
     let roleMember = await guild.roles.cache.get(roleMemberId);
     categorySalonsTextuels.children.cache.forEach(channel => {
@@ -358,7 +371,7 @@ async function blockChannels(){
     });
 }
 
-async function unblockChannels(){
+async function unlockChannels(){
     // On débloque les salons
     let roleMember = await guild.roles.cache.get(roleMemberId);
     categorySalonsTextuels.children.cache.forEach(channel => {
