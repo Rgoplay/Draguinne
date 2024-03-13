@@ -124,7 +124,7 @@ client.on('guildMemberRemove', user => {
     // On envoie un message dans le salon d'info
     channelInfo.send("L'utilisateur " + user.user.username + " (<@" + user.id +">) a quitté le serveur.");
     // On envoie un message dans le salon de gate
-    channelGate.send("> L'aventurier.e " + user.user.username + " a quitté la guilde. On lui souhaite une bonne continuation !");
+    channelGate.send("> L'aventurier.e " + user.user.username + "(<@" + user.id + ") a quitté la guilde. On lui souhaite une bonne continuation !");
 
 });
 
@@ -185,15 +185,15 @@ client.on("interactionCreate", async (interaction) => {
                 raidMode = true;
                 lockChannels();
 
-                var logString = `<@407992364347686934> Le mode raid a été activé par ${interaction.user.username}.`
-                channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée.");
+                var logString = `<@407992364347686934> Le mode raid a été activé par ${interaction.user.username} (@${interaction.user.id}).`
+                channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée. @here");
 
                 // On récupère l'option time
                 const time = interaction.options.getInteger('time');
                 if(time == null) {
-                    raidModeTime = defaultRaidModeTime;
+                    raidModeTime = 3*defaultRaidModeTime;
                 } else {
-                    raidModeTime = time;
+                    raidModeTime = 3*time;
                     logString += ` Le mode raid sera désactivé dans ${time} minutes.`;
                 }
                 channelInfo.send(logString);
@@ -302,12 +302,12 @@ async function serverCheck(){
         // On bloque les salons (on passe en mode raid pour defaultRaidModeTime minutes) si plus de un membre a spammé
         if (badUserList.length > 1) {
             raidMode = true;
-            raidModeTime = defaultRaidModeTime;
+            raidModeTime = 3*defaultRaidModeTime;
 
             lockChannels();
 
             //On envoie un message dans le salon info
-            channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée.");
+            channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée. @here");
             channelInfo.send("<@407992364347686934> Le mode raid a été activé.");
 
             // On supprime les 100 derniers messages des membres ayant envoyé le plus de messages
@@ -326,7 +326,6 @@ async function serverCheck(){
 
     if(raidMode) {
         raidModeTime--;
-        //Si le mode raid est activé depuis plus de 10 minutes
         if (raidModeTime <= 0) {
             // On désactive le mode raid
             raidMode = false;
