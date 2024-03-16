@@ -185,7 +185,7 @@ client.on("interactionCreate", async (interaction) => {
                 raidMode = true;
                 lockChannels();
 
-                var logString = `<@407992364347686934> Le mode raid a été activé par ${interaction.user.username} (@${interaction.user.id}).`
+                var logString = `<@407992364347686934> Le mode raid a été activé par ${interaction.user.username} (<@${interaction.user.id}>).`
                 channelGate.send("> Le mode raid vient d'être activé, les salons ont été bloqués. La vérification est désactivée. @here");
 
                 // On récupère l'option time
