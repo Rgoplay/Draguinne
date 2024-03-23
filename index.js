@@ -355,6 +355,8 @@ async function serverCheck(){
 }
 
 async function lockChannels(){
+    //On met en pause les invitations
+    guild.disableInvites(true);
     // On bloque les salons de la catégorie salons textuels
     let roleMember = await guild.roles.cache.get(roleMemberId);
     categorySalonsTextuels.children.cache.forEach(channel => {
@@ -371,6 +373,8 @@ async function lockChannels(){
 }
 
 async function unlockChannels(){
+    //On réactive les invitations
+    guild.disableInvites(false);
     // On débloque les salons
     let roleMember = await guild.roles.cache.get(roleMemberId);
     categorySalonsTextuels.children.cache.forEach(channel => {
