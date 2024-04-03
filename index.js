@@ -124,7 +124,7 @@ client.on('guildMemberRemove', user => {
     // On envoie un message dans le salon d'info
     channelInfo.send("L'utilisateur " + user.user.username + " (<@" + user.id +">) a quitté le serveur.");
     // On envoie un message dans le salon de gate
-    channelGate.send("> L'aventurier.e " + user.user.username + "(<@" + user.id + ") a quitté la guilde. On lui souhaite une bonne continuation !");
+    channelGate.send("> L'aventurier.e " + user.user.username + "(<@" + user.id + ">) a quitté la guilde. On lui souhaite une bonne continuation !");
 
 });
 
@@ -229,9 +229,9 @@ async function main(){
     setInterval(userAndServerCheck, 20000);
 }
 
-function userAndServerCheck(){
-    serverCheck();
-    userCheck();
+async function userAndServerCheck(){
+    await serverCheck();
+    await userCheck();
 }
 
 async function userCheck(){
@@ -249,17 +249,13 @@ async function userCheck(){
 
             if(usersData[id].threatScore > 10){
                 // On banni l'utilisateur et on supprime ses messages
-                banMember(member);
+                banMember([member]);
                 user.threatScore = 0;
-
-                // Info du ban
-                channelInfo.send("L'utilisateur " + member.user.username +  " (<@" + member.id +">) a été banni virtuellement.");
-                channelGate.send("> Le membre <@" + member.id +"> a été banni virtuellement.");
             }
         }
 
         // On décrémente le threatScore de l'utilisateur
-        if(user.threatScore > 0){
+        if(user.threatScore > 5){
             user.threatScore -= 5;
         }
         else {
@@ -291,16 +287,16 @@ async function serverCheck(){
 
     if(serverData.threatScore > 35){
 
-        var badUserList = [];
+        var badUserIdList = [];
         // On récupère les membres ayant un threatScore >= 8
         for (const [id, user] of Object.entries(usersData)) {
             if (user.threatScore >= 8) {
-                badUserList.push(id);
+                badUserIdList.push(id);
             }
         }
 
         // On bloque les salons (on passe en mode raid pour defaultRaidModeTime minutes) si plus de un membre a spammé
-        if (badUserList.length > 1) {
+        if (badUserIdList.length > 1) {
             raidMode = true;
             raidModeTime = 3*defaultRaidModeTime;
 
@@ -311,12 +307,13 @@ async function serverCheck(){
             channelInfo.send("<@407992364347686934> Le mode raid a été activé.");
 
             // On supprime les 100 derniers messages des membres ayant envoyé le plus de messages
-            for(id of nbMsgMaxUser) {
+            ban_member_list = [];
+            for(id of badUserIdList) {
                 var member = await guild.members.cache.get(id);
-                banMember(member);
-                channelInfo.send("L'utilisateur <@" + id +"> a été banni virtuellement.");
-                channelGate.send("> Le membre <@" + id +"> a été banni virtuellement.");
+                ban_member_list.push(member);
+                usersData[id].threatScore = 0;
             }
+            banMember(ban_member_list);
         }
     }
 
@@ -389,22 +386,49 @@ async function unlockChannels(){
     });
 }
 
-async function banMember(member){
-    // On le banni
-    await member.roles.add(roleBanId);
-    // On supprime le rôle membre
-    await member.roles.remove(roleMemberId);
-    // On supprime les 100 derniers messages
-    var messages = usersData[member.id].last100Msg;
-    for (const [message, content] of messages) {
-        try {
-            await message.delete();
-        }
-        catch {
-            console.log("Erreur lors de la suppression d'un message");
-        }
+async function banMember(members){
+    for (var member of members) {
+        // On le banni
+        await member.roles.add(roleBanId);
+        // On supprime le rôle membre
+        await member.roles.remove(roleMemberId);
+        // On supprime les 100 derniers messages
+        channelInfo.send("L'utilisateur <@" + member.id +"> a été banni virtuellement.");
+        channelGate.send("> Le membre <@" + member.id +"> a été banni virtuellement.");
     }
-    usersData[member.id].last100Msg = [];
+
+    for (var member of members) {
+        var messages = usersData[member.id].last100Msg;
+        for (const [message, content] of messages) {
+            try {
+                await message.delete();
+            }
+            catch {
+                //console.log("Erreur lors de la suppression d'un message");
+            }
+            sleep(500);
+        }
+        // On envoie un log des messages
+        log_text = "Suppression message de <@" + member.id + "> :";
+        var messages = usersData[member.id].last100Msg;
+        for (const [message, content] of messages) {
+            if(log_text.length + content.length < 1500){
+                log_text += "```"+ content + "```";
+            } else {
+                channelInfo.send(log_text);
+                log_text = "Suppression message de <@" + member.id + "> :";
+            }
+        }
+        channelInfo.send(log_text);
+        usersData[member.id].last100Msg = [];
+    }
+}
+
+
+function sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
 }
     
 
