@@ -1,4 +1,5 @@
 node_modules
 assets
 config.json
+config_old.json
 package-lock.json
