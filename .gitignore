@@ -2,4 +2,5 @@ node_modules
 assets
 config.json
 config_old.json
+real_config.json
 package-lock.json
