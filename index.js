@@ -22,8 +22,8 @@ Désactivation du mode raid après 10 minutes
 
 // Require the necessary discord.js classes
 const { Client, IntentsBitField, Partials} = require('discord.js');
-const { token } = require('./config.json');
-const { config } = require('./config.json')
+const { token } = require('./real_config.json');
+const { config } = require('./real_config.json')
 const { SlashCommandBuilder } = require('discord.js');
 
 // Create a new client instance
@@ -216,7 +216,14 @@ client.on("interactionCreate", async (interaction) => {
         channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
 
         // On vérifie que l'utilisateur est un membre du staff
-        if(interaction.member.roles.cache.has(config[guildId]["roles"].roleStaffId) || interaction.member.roles.cache.has(config[guildId]["roles"].roleAdminId)) {
+        var isallowed = false;
+        for(let roleId of config[guildId]["roles"].rolesStaffId){
+            if(interaction.member.roles.cache.has(roleId)){
+                isallowed = true;
+                break;
+            }
+        }
+        if(isallowed) {
             // On récupère l'option
             const enable = interaction.options.getBoolean('enable');
             if(enable) {
@@ -225,7 +232,7 @@ client.on("interactionCreate", async (interaction) => {
                 raidData[guildId].raidMode = true;
                 lockChannels(guild, guildId);
 
-                var logString = `<@&${config[guildId]["roles"].roleAdminId}> Le mode raid a été activé par ${interaction.user.username} (<@${interaction.user.id}>).`
+                var logString = `> Le mode raid a été activé par ${interaction.user.username} (<@${interaction.user.id}>).`
                 channelRaidInfo.send("> Le mode raid vient d'être activé");
 
                 // On récupère l'option time
@@ -248,6 +255,9 @@ client.on("interactionCreate", async (interaction) => {
                 channelInfo.send(`> Le mode raid a été désactivé par ${interaction.user.username}.`);
                 channelRaidInfo.send("> Le mode raid vient d'être désactivé.");
             }
+        }
+        else {
+            await interaction.reply("Vous n'avez pas les permissions pour effectuer cette commande.");
         }
     }
 });
@@ -341,7 +351,7 @@ async function serverCheck(){
 
                 //On envoie un message dans le salon info
                 channelRaidInfo.send("> Le mode raid vient d'être activé.");
-                channelInfo.send(`<@&${config[guildId]["roles"].roleAdminId}> Le mode raid a été activé.`);
+                channelInfo.send(`> Le mode raid a été activé.`);
 
                 // On supprime les 100 derniers messages des membres ayant envoyé le plus de messages
                 ban_member_list = [];
@@ -369,7 +379,7 @@ async function serverCheck(){
 
                 //On envoie un message dans le salon info
                 channelRaidInfo.send("> Le mode raid vient d'être désactivé.");
-                channelInfo.send(`<@&${config[guildId]["roles"].roleAdminId}> Le mode raid a été désactivé.`);
+                channelInfo.send(`> Le mode raid a été désactivé.`);
             }
         }
 
