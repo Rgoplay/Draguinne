@@ -22,8 +22,8 @@ Désactivation du mode raid après 10 minutes
 
 // Require the necessary discord.js classes
 const { Client, IntentsBitField, Partials} = require('discord.js');
-const { token } = require('./real_config.json');
-const { config } = require('./real_config.json')
+const { token } = require('./config.json');
+const { config } = require('./config.json')
 const { SlashCommandBuilder } = require('discord.js');
 
 // Create a new client instance
