@@ -4,3 +4,4 @@ config.json
 config_old.json
 real_config.json
 package-lock.json
+debug.js

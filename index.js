@@ -47,11 +47,19 @@ var raidData = {};
 
 client.on('messageCreate', message => {
     const guildId = message.guildId;
+    const guild = message.guild;
 
-    if (!guildId) return;
+    if (!guildId || !(guildId in config) || !guild) return;
 
     // Si le message est envoyé par le bot, on ne fait rien
     if (message.author.bot) return;
+
+    const creationDate = message.author.createdAt;
+    const account_age_in_day = Math.floor((new Date() - creationDate) / (1000 * 60 * 60 * 24));
+    var multiplier = -0.001*account_age_in_day + 1.4;
+    if(multiplier < 0.9){
+        multiplier = 0.9;
+    }
 
     // Si l'utilisateur n'est pas dans la liste des utilisateurs, on l'ajoute
     if (!(message.author.id in usersData[guildId])) {
@@ -77,32 +85,32 @@ client.on('messageCreate', message => {
 
     // Si le message contient une mention
     if(message.mentions.users.size > 0 || message.mentions.roles.size > 0 || message.mentions.everyone) {
-        usersData[guildId][message.author.id].threatScore += threatConfig.scoreMention;
-        serverData[guildId].threatScore += threatConfig.scoreMention;
+        usersData[guildId][message.author.id].threatScore += multiplier*threatConfig.scoreMention;
+        serverData[guildId].threatScore += multiplier*threatConfig.scoreMention;
         isHeavyMsg = true;
     }
 
     // Si le message contient un lien ou un fichier
     if (message.attachments.size > 0 || message.embeds.length > 0 || message.content.includes("http")) {
-        usersData[guildId][message.author.id].threatScore += threatConfig.scoreMedia;
-        serverData[guildId].threatScore += threatConfig.scoreMedia;
+        usersData[guildId][message.author.id].threatScore += multiplier*threatConfig.scoreMedia;
+        serverData[guildId].threatScore += multiplier*threatConfig.scoreMedia;
         isHeavyMsg = true;
     }
 
     // Si le message est un doublon, on incrémente le nombre de doublons de l'utilisateur
     if (usersData[guildId][message.author.id].last100Msg.filter(msg => msg[1] == message.content).length > 1) {
-        usersData[guildId][message.author.id].threatScore += threatConfig.scoreDupliMsg;
+        usersData[guildId][message.author.id].threatScore += multiplier*threatConfig.scoreDupliMsg;
         isHeavyMsg = true;
     }
 
     // Si le message est un doublon, on incrémente le nombre de doublons du serveur
     if (serverData[guildId].last200Msg.filter(msg => msg[1] == message.content).length > 1) {
-        serverData[guildId].threatScore += threatConfig.scoreDupliMsg;
+        serverData[guildId].threatScore += multiplier*threatConfig.scoreDupliMsg;
     }
 
     if(!isHeavyMsg){
-        usersData[guildId][message.author.id].threatScore += threatConfig.scoreMsg;
-        serverData[guildId].threatScore += threatConfig.scoreMsg;
+        usersData[guildId][message.author.id].threatScore += multiplier*threatConfig.scoreMsg;
+        serverData[guildId].threatScore += multiplier*threatConfig.scoreMsg;
     }
 
 });
@@ -112,7 +120,7 @@ client.on('guildMemberRemove', async (user) => {
     const guildId = user.guild.id;
     const guild  = await client.guilds.cache.get(guildId);
 
-    if(!guildId || !guild) return;
+    if(!guildId || !guild || !(guildId in config)) return;
 
     // On supprime l'utilisateur de la liste des utilisateurs
     delete usersData[guildId][user.id];
@@ -135,7 +143,7 @@ client.on('guildMemberAdd', async (user) => {
     const guildId = user.guild.id;
     const guild  = await client.guilds.cache.get(guildId);
 
-    if(!guildId || !guild) return;
+    if(!guildId || !guild || !(guildId in config)) return;
 
     channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
     if(config[guildId]["channels"].channelGateEnabled){
@@ -152,9 +160,8 @@ client.on('guildMemberAdd', async (user) => {
 
 client.on('messageReactionAdd', async (reaction, user) => {
 
-
     const guildId = reaction.message.guild.id;
-    if(!guildId || !config[guildId]["verification"].enableVerification) return;
+    if(!guildId || !(guildId in config) || !config[guildId]["verification"].enableVerification) return;
 
     const guild  = await client.guilds.cache.get(guildId);
     if(!guild) return;
@@ -167,18 +174,17 @@ client.on('messageReactionAdd', async (reaction, user) => {
         channelInfo.send("L'utilisateur " + user.username + " (<@" + user.id +">) a démarré la vérification.");
 
         // On lui donne le rôle membre après 5 minutes
-        setTimeout(() => verifyUser(guildId, user.id), 300000);//300000
+        setTimeout(() => verifyUser(guild, guildId, user.id, channelInfo), 300000);//300000
     }
 });
 
-async function verifyUser(guildId, userId){
+async function verifyUser(guild, guildId, userId, channelInfo){
     // On récupère le membre
-    var member = await client.guilds.cache.get(guildId).members.cache.get(userId);
+    var member = await guild.members.cache.get(userId);
 
     // On vérifie si le membre est toujours sur le serveur
     if(member == undefined) return;
 
-    channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
     if(config[guildId]["channels"].channelWelcomeEnabled){
         channelWelcome = await guild.channels.cache.get(config[guildId]["channels"].channelWelcomeId);
     }
@@ -210,7 +216,7 @@ client.on("interactionCreate", async (interaction) => {
         const guildId = interaction.guild.id;
         const guild  = await client.guilds.cache.get(guildId);
 
-        if(!guildId || !guild) return;
+        if(!guildId || !guild || !(guildId in config)) return;
         
         channelRaidInfo = await guild.channels.cache.get(config[guildId]["channels"].channelRaidInfoId);
         channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
