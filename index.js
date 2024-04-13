@@ -48,7 +48,7 @@ var raidData = {};
 client.on('messageCreate', message => {
     const guildId = message.guildId;
 
-    if (!guildId) return;
+    if (!guildId || !(guildId in config)) return;
 
     // Si le message est envoyé par le bot, on ne fait rien
     if (message.author.bot) return;
@@ -112,7 +112,7 @@ client.on('guildMemberRemove', async (user) => {
     const guildId = user.guild.id;
     const guild  = await client.guilds.cache.get(guildId);
 
-    if(!guildId || !guild) return;
+    if(!guildId || !guild || !(guildId in config)) return;
 
     // On supprime l'utilisateur de la liste des utilisateurs
     delete usersData[guildId][user.id];
@@ -135,7 +135,7 @@ client.on('guildMemberAdd', async (user) => {
     const guildId = user.guild.id;
     const guild  = await client.guilds.cache.get(guildId);
 
-    if(!guildId || !guild) return;
+    if(!guildId || !guild || !(guildId in config)) return;
 
     channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
     if(config[guildId]["channels"].channelGateEnabled){
@@ -152,9 +152,8 @@ client.on('guildMemberAdd', async (user) => {
 
 client.on('messageReactionAdd', async (reaction, user) => {
 
-
     const guildId = reaction.message.guild.id;
-    if(!guildId || !config[guildId]["verification"].enableVerification) return;
+    if(!guildId || !(guildId in config) || !config[guildId]["verification"].enableVerification) return;
 
     const guild  = await client.guilds.cache.get(guildId);
     if(!guild) return;
@@ -167,18 +166,17 @@ client.on('messageReactionAdd', async (reaction, user) => {
         channelInfo.send("L'utilisateur " + user.username + " (<@" + user.id +">) a démarré la vérification.");
 
         // On lui donne le rôle membre après 5 minutes
-        setTimeout(() => verifyUser(guildId, user.id), 300000);//300000
+        setTimeout(() => verifyUser(guildId, user.id, channelInfo), 300000);//300000
     }
 });
 
-async function verifyUser(guildId, userId){
+async function verifyUser(guildId, userId, channelInfo){
     // On récupère le membre
     var member = await client.guilds.cache.get(guildId).members.cache.get(userId);
 
     // On vérifie si le membre est toujours sur le serveur
     if(member == undefined) return;
 
-    channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
     if(config[guildId]["channels"].channelWelcomeEnabled){
         channelWelcome = await guild.channels.cache.get(config[guildId]["channels"].channelWelcomeId);
     }
@@ -210,7 +208,7 @@ client.on("interactionCreate", async (interaction) => {
         const guildId = interaction.guild.id;
         const guild  = await client.guilds.cache.get(guildId);
 
-        if(!guildId || !guild) return;
+        if(!guildId || !guild || !(guildId in config)) return;
         
         channelRaidInfo = await guild.channels.cache.get(config[guildId]["channels"].channelRaidInfoId);
         channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
