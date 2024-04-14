@@ -166,7 +166,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     const guild  = await client.guilds.cache.get(guildId);
     if(!guild) return;
 
-    channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
+    const channelInfo = await guild.channels.cache.get(config[guildId]["channels"].channelInfoId);
 
     //On vérifie que la réaction est sur le message de vérification
     if (reaction.message.id == config[guildId]["verification"].idMessageVerification) {
