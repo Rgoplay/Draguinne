@@ -174,7 +174,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
         channelInfo.send("L'utilisateur " + user.username + " (<@" + user.id +">) a démarré la vérification.");
 
         // On lui donne le rôle membre après 5 minutes
-        setTimeout(() => verifyUser(guild, guildId, user.id, channelInfo), 300000);//300000
+        setTimeout(() => verifyUser(guild, guildId, user.id, channelInfo), config[guildId]["verification"].waitingTime*1000);//300000
     }
 });
 
