@@ -22,8 +22,8 @@ Désactivation du mode raid après 10 minutes
 
 // Require the necessary discord.js classes
 const { Client, IntentsBitField, Partials} = require('discord.js');
-const { token } = require('./config.json');
-const { config } = require('./config.json')
+const { token } = require('./real_config.json');
+const { config } = require('./real_config.json')
 const { SlashCommandBuilder } = require('discord.js');
 
 // Create a new client instance
@@ -48,8 +48,9 @@ var raidData = {};
 client.on('messageCreate', message => {
     const guildId = message.guildId;
     const guild = message.guild;
+    const channel = message.channel;
 
-    if (!guildId || !(guildId in config) || !guild) return;
+    if (!guildId || !(guildId in config) || !guild || !channel) return;
 
     // Si le message est envoyé par le bot, on ne fait rien
     if (message.author.bot) return;
@@ -59,6 +60,11 @@ client.on('messageCreate', message => {
     var multiplier = -0.001*account_age_in_day + 1.4;
     if(multiplier < 0.9){
         multiplier = 0.9;
+    }
+
+    // Si le message est envoyé dans un salon ignoré, on ne change pas le threat score
+    if (config[guildId]["raid"].ignoredSpamChannels.includes(channel.id)) {
+        multiplier = 0;
     }
 
     // Si l'utilisateur n'est pas dans la liste des utilisateurs, on l'ajoute
