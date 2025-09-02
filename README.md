@@ -10,9 +10,9 @@ Features :
 - isolation of suspicious accounts
 
 ## Roadmap
-[] Translating to english
-[] Support latest version of discord.js 
-[] Easier configuration
+- [ ] Translating to english
+- [ ] Support latest version of discord.js 
+- [ ] Easier configuration
 
 
 ## License
